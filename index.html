@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket Latency Checker</title>
+  <style>
+    .result-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+      font-family: Arial;
+    }
+    .latency {
+      margin-right: 10px;
+    }
+    .request-url {
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    .error {
+      color: red;
+    }
+    .spoiler {
+      color: #0000FF;
+      cursor: pointer;
+    }
+    .spoiler-content {
+      display: none;
+      border: 1px solid #0000FF;
+      padding: 10px;
+    }
+    h1 {
+      margin-top: 0;
+    }
+    .codeblock {
+      background-color: lightgray;
+      font-weight: bold;
+    }
+  </style>
+  <script>
+    function startWebSocket() {
+      const urlInput = document.getElementById('urlInput');
+      let webSocketURL = urlInput.value.trim() || urlInput.placeholder.trim();
+
+      const resultContainer = document.getElementById('resultContainer');
+      const websocket = new WebSocket(webSocketURL);
+      let messageCount = 0;
+      let resultRow;
+
+      websocket.onopen = function () {
+        console.log('WebSocket opened');
+        startBatch(webSocketURL);
+      };
+
+      function startBatch(currentURL) {
+        if (messageCount < 3) {
+          resultRow = document.createElement('div');
+          resultRow.classList.add('result-row');
+          resultContainer.appendChild(resultRow);
+
+          const urlElement = document.createElement('span');
+          urlElement.classList.add('request-url');
+          urlElement.textContent = currentURL;
+          resultRow.appendChild(urlElement);
+
+          sendMessage();
+        } else {
+          websocket.close();
+        }
+      }
+
+      function sendMessage() {
+        const startTime = new Date().getTime();
+        websocket.send(`Test message ${messageCount + 1} for latency measurement`);
+
+        websocket.onmessage = function () {
+          const latency = new Date().getTime() - startTime;
+          const latencyElement = document.createElement('span');
+          latencyElement.classList.add('latency');
+          latencyElement.textContent = `${latency}ms`;
+          resultRow.appendChild(latencyElement);
+          messageCount++;
+
+          if (messageCount % 3 === 0) {
+            startBatch(webSocketURL);
+          } else {
+            sendMessage();
+          }
+        };
+      }
+
+      websocket.onerror = function (error) {
+        const errorElement = document.createElement('p');
+        errorElement.classList.add('error');
+        errorElement.textContent = `Error for ${webSocketURL}: ${error.message}`;
+        resultContainer.appendChild(errorElement);
+      };
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const urlInput = document.getElementById('urlInput');
+      urlInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+          startWebSocket();
+        }
+      });
+    });
+
+    function toggleSpoiler() {
+      const spoilerContent = document.getElementById('spoilerContent');
+      spoilerContent.style.display = spoilerContent.style.display === 'none' ? 'block' : 'none';
+    }
+  </script>
+</head>
+<body>
+  <h1>WebSocket Latency Checker</h1>
+  <div>
+    <p>You need to run an echo server on the remote host to conduct this test.</p>
+    <p class="spoiler" onclick="toggleSpoiler()">Here is a simple WebSocket echo server.</p>
+    <div id="spoilerContent" class="spoiler-content" style="display: none;">
+      <p>Dependency: websockets</p>
+      <p>Install from pip: <span class="codeblock">pip install websockets</span></p>
+      <p>Install from apt: <span class="codeblock">apt install python3-websockets</span></p>
+      <p>Save the following code as <span class="codeblock">wsecho.py</span> and run it with <span class="codeblock">python3 wsecho.py</span>:</p>
+      <pre class="codeblock"><code>#!/usr/bin/env python
+
+import asyncio
+import websockets
+import os
+
+async def echo(websocket, path):
+    async for message in websocket:
+        print("Received and echoing message: " + message, flush=True)
+        await websocket.send(message)
+
+start_server = websockets.serve(echo, "0.0.0.0", os.environ.get('PORT') or 8080)
+
+print("WebSockets echo server starting", flush=True)
+asyncio.get_event_loop().run_until_complete(start_server)
+
+print("WebSockets echo server running", flush=True)
+asyncio.get_event_loop().run_forever()
+      </code></pre>
+    </div>
+  </div>
+  <label for="urlInput">Enter WebSocket URL:</label>
+  <input type="text" id="urlInput" placeholder="wss://ws.postman-echo.com/raw">
+  <button onclick="startWebSocket()">Check Latency</button>
+  <div id="resultContainer"></div>
+</body>
+</html>
